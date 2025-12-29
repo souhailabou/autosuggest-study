@@ -228,7 +228,16 @@ def umux_page():
 @app.route("/")
 def home():
     return send_from_directory(".", "autosuggest.html")
-
+@app.route("/download_umfrage")
+def download_umfrage():
+    file_path = "umux_results.xlsx"  
+    if os.path.exists(file_path):
+        return send_file(
+            file_path,
+            as_attachment=True,
+            download_name="umfrage_results.xlsx"
+        )
+    return "File not found", 404
 # ------------------------------------------
 # RUN
 # ------------------------------------------
@@ -237,4 +246,5 @@ if __name__ == "__main__":
 
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
 
