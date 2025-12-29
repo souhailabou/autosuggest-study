@@ -5,6 +5,7 @@ import time
 import pandas as pd
 import os
 from flask import send_from_directory
+from flask import send_file
 
 app = Flask(__name__)
 CORS(app)
@@ -228,17 +229,14 @@ def umux_page():
 @app.route("/")
 def home():
     return send_from_directory(".", "autosuggest.html")
-@app.route("/download_umfrage")
-def download_umfrage():
-    file_path = "umux_results.xlsx"  
-    if os.path.exists(file_path):
-        return send_file(
-            file_path,
-            as_attachment=True,
-            download_name="umfrage_results.xlsx"
-        )
-    return "File not found", 404
-# ------------------------------------------
+@app.route("/download_excel")
+def download_excel():
+    file_path = "umux_results.xlsx"
+    return send_file(
+        file_path,
+        as_attachment=True
+    )    
+#------------------------------------------
 # RUN
 # ------------------------------------------
 
@@ -246,5 +244,6 @@ if __name__ == "__main__":
 
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
 
 
