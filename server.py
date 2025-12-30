@@ -14,7 +14,7 @@ CORS(app)
 # INIT DATABASE (with DEVICE column)
 # ------------------------------------------
 def init_db():
-    conn = sqlite3.connect("results.db")
+    supabase.table("results").insert(...)
     c = conn.cursor()
     c.execute("""
         CREATE TABLE IF NOT EXISTS results (
@@ -244,6 +244,7 @@ if __name__ == "__main__":
 
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
