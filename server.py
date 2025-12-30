@@ -6,9 +6,15 @@ import pandas as pd
 import os
 from flask import send_from_directory
 from flask import send_file
+from supabase import create_client
+
 
 app = Flask(__name__)
 CORS(app)
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # ------------------------------------------
 # INIT DATABASE (with DEVICE column)
@@ -38,27 +44,12 @@ init_db()
 def save():
     data = request.json
 
-    variant = data.get("variant")
-    time_val = data.get("time")
-    errors = data.get("errors")
-    device = data.get("device")  # NEW
-
-    conn = sqlite3.connect("results.db")
-    c = conn.cursor()
-
-    c.execute("""
-        INSERT INTO results (variant, time, errors, device, timestamp)
-        VALUES (?, ?, ?, ?, ?)
-    """, (
-        variant,
-        time_val,
-        errors,
-        device,
-        time.strftime("%Y-%m-%d %H:%M:%S")
-    ))
-
-    conn.commit()
-    conn.close()
+    supabase.table("results").insert({
+        "variant": data.get("variant"),
+        "time": data.get("time"),
+        "errors": data.get("errors"),
+        "device": data.get("device")
+    }).execute()
 
     return {"status": "saved"}
 
@@ -185,42 +176,21 @@ def admin():
 def save_umux():
     data = request.json
 
-    q1 = data.get("q1")
-    q2 = data.get("q2")
-    q3 = data.get("q3")
-    q4 = data.get("q4")
-    good = data.get("good")
-    bad = data.get("bad")
-    sat = data.get("satisfaction")
-    device = data.get("device")
-    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    umux_score = 50 + ((data["q1"] - data["q2"] + data["q3"] - data["q4"]) * 24)
 
-    umux_score = 50 + ((q1 - q2 + q3 - q4) * 24)
+    supabase.table("umux").insert({
+        "q1": data["q1"],
+        "q2": data["q2"],
+        "q3": data["q3"],
+        "q4": data["q4"],
+        "good": data.get("feedback_pos"),
+        "bad": data.get("feedback_neg"),
+        "satisfaction": data.get("satisfaction"),
+        "device": data.get("device"),
+        "umux_score": umux_score
+    }).execute()
 
-    file = "umux_results.xlsx"
-
-    new_row = {
-        "Timestamp": timestamp,
-        "Device": device,
-        "Q1": q1,
-        "Q2": q2,
-        "Q3": q3,
-        "Q4": q4,
-        "UMUX Score": umux_score,
-        "Good": good,
-        "Bad": bad,
-        "Satisfaction": sat
-    }
-
-    if os.path.exists(file):
-        df = pd.read_excel(file)
-        df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-    else:
-        df = pd.DataFrame([new_row])
-
-    df.to_excel(file, index=False)
-
-    return {"status":"saved", "score":umux_score}
+    return {"status": "saved", "score": umux_score}
 
 
 @app.route("/umux")
@@ -244,6 +214,7 @@ if __name__ == "__main__":
 
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
