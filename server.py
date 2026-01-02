@@ -21,22 +21,24 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 @app.route("/save", methods=["POST"])
 def save():
     try:
-        data = request.get_json()
+        data = request.get_json(force=True)
 
-        result = supabase.table("results").insert({
-            "variant": data.get("variant"),
-            "time": float(data.get("time")),
-            "errors": int(data.get("errors")),
-            "device": data.get("device"),
-            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+        print("📥 DATA RECEIVED:", data)
+
+        response = supabase.table("results").insert({
+            "variant": data["variant"],
+            "time": float(data["time"]),
+            "errors": int(data["errors"]),
+            "device": data["device"]
         }).execute()
 
-        return {"status": "saved"}
+        print("✅ SUPABASE RESPONSE:", response)
+
+        return {"status": "saved"}, 200
 
     except Exception as e:
-        print("❌ ERROR /save:", e)
+        print("❌ SUPABASE ERROR:", str(e))
         return {"error": str(e)}, 500
-
 
 # -----------------------------
 # ADMIN PAGE (READ FROM SUPABASE)
@@ -145,6 +147,7 @@ def umux_page():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
