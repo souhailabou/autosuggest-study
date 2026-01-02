@@ -20,17 +20,23 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # -----------------------------
 @app.route("/save", methods=["POST"])
 def save():
-    data = request.json
+    try:
+        data = request.get_json()
 
-    supabase.table("results").insert({
-        "variant": data.get("variant"),
-        "time": data.get("time"),
-        "errors": data.get("errors"),
-        "device": data.get("device"),
-        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
-    }).execute()
+        result = supabase.table("results").insert({
+            "variant": data.get("variant"),
+            "time": float(data.get("time")),
+            "errors": int(data.get("errors")),
+            "device": data.get("device"),
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+        }).execute()
 
-    return {"status": "saved"}
+        return {"status": "saved"}
+
+    except Exception as e:
+        print("❌ ERROR /save:", e)
+        return {"error": str(e)}, 500
+
 
 # -----------------------------
 # ADMIN PAGE (READ FROM SUPABASE)
@@ -98,24 +104,29 @@ def admin():
 # -----------------------------
 @app.route("/save_umux", methods=["POST"])
 def save_umux():
-    data = request.json
+    try:
+        data = request.get_json()
 
-    umux_score = 50 + ((data["q1"] - data["q2"] + data["q3"] - data["q4"]) * 24)
+        umux_score = 50 + ((data["q1"] - data["q2"] + data["q3"] - data["q4"]) * 24)
 
-    supabase.table("umux").insert({
-        "q1": data["q1"],
-        "q2": data["q2"],
-        "q3": data["q3"],
-        "q4": data["q4"],
-        "good": data.get("feedback_pos"),
-        "bad": data.get("feedback_neg"),
-        "satisfaction": data.get("satisfaction"),
-        "device": data.get("device"),
-        "umux_score": umux_score,
-        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
-    }).execute()
+        supabase.table("umux").insert({
+            "q1": data["q1"],
+            "q2": data["q2"],
+            "q3": data["q3"],
+            "q4": data["q4"],
+            "good": data.get("feedback_pos"),
+            "bad": data.get("feedback_neg"),
+            "satisfaction": data.get("satisfaction"),
+            "device": data.get("device"),
+            "umux_score": umux_score,
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+        }).execute()
 
-    return {"status": "saved", "score": umux_score}
+        return {"status": "saved", "score": umux_score}
+
+    except Exception as e:
+        print("❌ ERROR /save_umux:", e)
+        return {"error": str(e)}, 500
 
 # -----------------------------
 # STATIC PAGES
@@ -134,6 +145,7 @@ def umux_page():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
