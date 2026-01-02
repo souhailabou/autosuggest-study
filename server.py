@@ -1,45 +1,24 @@
 from flask import Flask, request
 from flask_cors import CORS
-import sqlite3
 import time
-import pandas as pd
 import os
 from flask import send_from_directory
-from flask import send_file
 from supabase import create_client
-
 
 app = Flask(__name__)
 CORS(app)
+
+# --------------------------------------------------
+# SUPABASE CONFIG
+# --------------------------------------------------
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# ------------------------------------------
-# INIT DATABASE (with DEVICE column)
-# ------------------------------------------
-def init_db():
-    supabase.table("results").insert(...)
-    c = conn.cursor()
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS results (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            variant TEXT,
-            time REAL,
-            errors INTEGER,
-            device TEXT,
-            timestamp TEXT
-        )
-    """)
-    conn.commit()
-    conn.close()
-
-init_db()
-
-# ------------------------------------------
-# SAVE RESULT (with device)
-# ------------------------------------------
+# --------------------------------------------------
+# SAVE RESULT (Autosuggest / Autocomplete / Instant)
+# --------------------------------------------------
 @app.route("/save", methods=["POST"])
 def save():
     data = request.json
@@ -48,82 +27,53 @@ def save():
         "variant": data.get("variant"),
         "time": data.get("time"),
         "errors": data.get("errors"),
-        "device": data.get("device")
+        "device": data.get("device"),
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
     }).execute()
 
     return {"status": "saved"}
 
-# ------------------------------------------
+# --------------------------------------------------
 # ADMIN PAGE
-# ------------------------------------------
+# --------------------------------------------------
 @app.route("/admin")
 def admin():
-    conn = sqlite3.connect("results.db")
-    c = conn.cursor()
-    c.execute("SELECT id, variant, time, errors, device, timestamp FROM results")
-    rows = c.fetchall()
-    conn.close()
+    response = supabase.table("results").select("*").order("id").execute()
+    rows = response.data
 
-    # Séparation mobile / desktop
-    mobile_times = []
-    mobile_errors = []
-    desktop_times = []
-    desktop_errors = []
+    mobile_times, mobile_errors = [], []
+    desktop_times, desktop_errors = [], []
 
-    for _id, variant, t, e, device, ts in rows:
-        device = str(device).lower()   # IMPORTANT : fix des stats ❗
-
+    for r in rows:
+        device = (r.get("device") or "").lower()
         if device == "mobile":
-            mobile_times.append(t)
-            mobile_errors.append(e)
+            mobile_times.append(r["time"])
+            mobile_errors.append(r["errors"])
         elif device == "desktop":
-            desktop_times.append(t)
-            desktop_errors.append(e)
+            desktop_times.append(r["time"])
+            desktop_errors.append(r["errors"])
 
     def avg(lst):
         return round(sum(lst) / len(lst), 2) if lst else 0
 
     mobile_avg_time = avg(mobile_times)
     mobile_avg_errors = avg(mobile_errors)
-
     desktop_avg_time = avg(desktop_times)
     desktop_avg_errors = avg(desktop_errors)
-
     total_avg_time = avg(mobile_times + desktop_times)
     total_avg_errors = avg(mobile_errors + desktop_errors)
 
-    # -------------------------------------------
-    # HTML + CSS
-    # -------------------------------------------
     html = """
     <h1 style='color:#4c6fff;'>📊 AUTOSUGGEST – ADMIN PANEL</h1>
-
     <style>
         body { font-family: Arial; padding: 20px; }
-        table {
-            border-collapse: collapse;
-            width: 60%;
-            margin-bottom: 25px;
-            font-size: 14px;
-        }
-        th, td {
-            border: 1px solid #555;
-            padding: 6px 8px;
-            text-align: center;
-        }
-        th {
-            background: #4c6fff;
-            color: white;
-            font-size: 14px;
-        }
+        table { border-collapse: collapse; width: 80%; margin-bottom: 25px; }
+        th, td { border: 1px solid #555; padding: 6px 8px; text-align: center; }
+        th { background: #4c6fff; color: white; }
         h2 { color: #4c6fff; margin-top: 30px; }
-        .small-table {
-            width: 35%;
-        }
     </style>
 
     <h2>📄 DETAILLIERTE ERGEBNISSE</h2>
-
     <table>
         <tr>
             <th>ID</th>
@@ -135,43 +85,39 @@ def admin():
         </tr>
     """
 
-    # TABLEAU DÉTAILLÉ
     for r in rows:
-        html += "<tr>"
-        for col in r:
-            html += f"<td>{col}</td>"
-        html += "</tr>"
+        html += f"""
+        <tr>
+            <td>{r['id']}</td>
+            <td>{r['variant']}</td>
+            <td>{r['time']}</td>
+            <td>{r['errors']}</td>
+            <td>{r['device']}</td>
+            <td>{r['timestamp']}</td>
+        </tr>
+        """
 
-    # TABLEAUX STATISTIQUES COMPACTS
     html += f"""
     </table>
 
-    <h2>📱 MOBILE – Statistiken</h2>
-    <table class="small-table">
-        <tr><th>Metrik</th><th>Wert</th></tr>
-        <tr><td>⏱ Durchschnittszeit</td><td>{mobile_avg_time} s</td></tr>
-        <tr><td>❌ Durchschnittliche Fehler</td><td>{mobile_avg_errors}</td></tr>
-    </table>
+    <h2>📱 MOBILE</h2>
+    Durchschnittszeit: {mobile_avg_time} s<br>
+    Durchschnittliche Fehler: {mobile_avg_errors}
 
-    <h2>💻 DESKTOP – Statistiken</h2>
-    <table class="small-table">
-        <tr><th>Metrik</th><th>Wert</th></tr>
-        <tr><td>⏱ Durchschnittszeit</td><td>{desktop_avg_time} s</td></tr>
-        <tr><td>❌ Durchschnittliche Fehler</td><td>{desktop_avg_errors}</td></tr>
-    </table>
+    <h2>💻 DESKTOP</h2>
+    Durchschnittszeit: {desktop_avg_time} s<br>
+    Durchschnittliche Fehler: {desktop_avg_errors}
 
-    <h2>📊 GESAMT (Mobile + Desktop)</h2>
-    <table class="small-table">
-        <tr><th>Metrik</th><th>Wert</th></tr>
-        <tr><td>⏱ Gesamt-Mittelwert Zeit</td><td>{total_avg_time} s</td></tr>
-        <tr><td>❌ Gesamt-Fehlerdurchschnitt</td><td>{total_avg_errors}</td></tr>
-    </table>
+    <h2>📊 GESAMT</h2>
+    Gesamt-Mittelwert Zeit: {total_avg_time} s<br>
+    Gesamt-Fehlerdurchschnitt: {total_avg_errors}
     """
 
     return html
-# ---------------------------------------------------------
-#  SAVE UMUX – stocke les résultats dans un Excel séparé
-# ---------------------------------------------------------
+
+# --------------------------------------------------
+# SAVE UMUX
+# --------------------------------------------------
 @app.route("/save_umux", methods=["POST"])
 def save_umux():
     data = request.json
@@ -187,33 +133,31 @@ def save_umux():
         "bad": data.get("feedback_neg"),
         "satisfaction": data.get("satisfaction"),
         "device": data.get("device"),
-        "umux_score": umux_score
+        "umux_score": umux_score,
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
     }).execute()
 
     return {"status": "saved", "score": umux_score}
 
-
-@app.route("/umux")
-def umux_page():
-    return send_from_directory("", "umux.html")
+# --------------------------------------------------
+# PAGES
+# --------------------------------------------------
 @app.route("/")
 def home():
     return send_from_directory(".", "autosuggest.html")
-@app.route("/download_excel")
-def download_excel():
-    file_path = "umux_results.xlsx"
-    return send_file(
-        file_path,
-        as_attachment=True
-    )    
-#------------------------------------------
+
+@app.route("/umux")
+def umux_page():
+    return send_from_directory(".", "umux.html")
+
+# --------------------------------------------------
 # RUN
-# ------------------------------------------
-
+# --------------------------------------------------
 if __name__ == "__main__":
-
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
+
 
 
 
