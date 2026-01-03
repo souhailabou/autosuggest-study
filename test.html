@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Supabase Test</title>
+</head>
+<body>
+
+<h2>Test Supabase INSERT</h2>
+<button id="btn">Envoyer test</button>
+
+<script type="module">
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+
+const supabase = createClient(
+  "SUPABASE_URL",
+  "SUPABASE_ANON_KEY"
+);
+
+document.getElementById("btn").onclick = async () => {
+
+  const { error } = await supabase
+    .from("results")
+    .insert([
+      {
+        variant: "TEST_NO_SERVER",
+        time: 3.5,
+        errors: 0,
+        device: "Desktop"
+      }
+    ]);
+
+  if (error) {
+    alert("❌ Erreur : " + error.message);
+    console.error(error);
+  } else {
+    alert("✅ Donnée enregistrée !");
+  }
+};
+</script>
+
+</body>
+</html>
